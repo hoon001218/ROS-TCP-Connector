@@ -1,7 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Reflection;
 using Unity.Robotics.ROSTCPConnector.MessageGeneration;
+// using Unity.Robotics;
 using UnityEngine;
 
 namespace Unity.Robotics.ROSTCPConnector
@@ -19,8 +22,8 @@ namespace Unity.Robotics.ROSTCPConnector
         public static GUIStyle s_BoldStyle;
 
         // these are static so that anyone can register tabs and windows without needing to worry about whether the hud has been initialized
-        static SortedList<int, IHudTab> s_HUDTabs = new SortedList<int, IHudTab>();
-        static SortedList<int, Action> s_HeaderContents = new SortedList<int, Action>();
+        public static SortedList<int, IHudTab> s_HUDTabs = new SortedList<int, IHudTab>();
+        public static SortedList<int, Action> s_HeaderContents = new SortedList<int, Action>();
         static List<HudWindow> s_ActiveWindows = new List<HudWindow>();
         static int s_NextWindowID = 101;
 
@@ -46,6 +49,12 @@ namespace Unity.Robotics.ROSTCPConnector
 
             foreach (Action element in s_HeaderContents.Values)
             {
+                // MethodInfo[] methodInfos = element.GetInvocationList().Select(d => d.Method).ToArray();
+                // foreach (MethodInfo methodInfo in methodInfos)
+                // {
+                //     Debug.Log(methodInfo.Name);
+                // }
+                
                 element();
             }
 
@@ -53,6 +62,15 @@ namespace Unity.Robotics.ROSTCPConnector
 
             foreach (IHudTab tab in s_HUDTabs.Values)
             {
+                // if(tab.Label == "Topics")
+                // {
+                //     List<VisualizationTopicsTabEntry> topics = tab.getTopicSorted();
+                //     foreach (VisualizationTopicsTabEntry topic in topics)
+                //     {
+                //         Debug.Log(topic.Topic+" "+topic.IsVisualizingUI + " " + topic.IsVisualizingDrawing);
+                //     }
+                // }
+                // print((VisualizationTopicsTabEntry)tab.IsVisualizingDrawing);
                 var wasSelected = tab == m_SelectedTab;
                 var selected = GUILayout.Toggle(wasSelected, tab.Label, GUI.skin.button);
                 if (selected != wasSelected)
@@ -74,6 +92,10 @@ namespace Unity.Robotics.ROSTCPConnector
 
             GUILayout.EndVertical();
 
+            // foreach(HudWindow window in s_ActiveWindows)
+            // {
+            //     Debug.Log(window.m_Title);
+            // }
             // Draggable windows
             var current = Event.current;
             if (current.type == EventType.MouseDown)

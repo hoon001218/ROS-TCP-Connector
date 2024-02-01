@@ -36,6 +36,7 @@ public class ImageDefaultVisualizer : BaseVisualFactory<ImageMsg>
         // the raw bytes from the message, dumped into a texture.
         // cheap to make but will look wrong without a special shader
         Texture2D m_CheapTexture2D;
+        public static Texture2D CheapTexture2D;
         Material m_CheapTextureMaterial;
         List<Action<Texture2D>> m_OnChangeCallbacks = new List<Action<Texture2D>>();
 
@@ -105,6 +106,7 @@ public class ImageDefaultVisualizer : BaseVisualFactory<ImageMsg>
                     }
                     m_CheapTexture2D.GUITexture(m_CheapTextureMaterial);
                 }
+                ImageVisual.CheapTexture2D = GetTexture();
             }
         }
 

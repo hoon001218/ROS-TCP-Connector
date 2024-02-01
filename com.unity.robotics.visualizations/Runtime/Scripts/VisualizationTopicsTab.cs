@@ -12,6 +12,7 @@ namespace Unity.Robotics.Visualizations
         ROSConnection m_Connection;
         Dictionary<string, VisualizationTopicsTabEntry> m_Topics = new Dictionary<string, VisualizationTopicsTabEntry>();
         List<VisualizationTopicsTabEntry> m_TopicsSorted;
+        // public static List<VisualizationTopicsTabEntry> TopicsSorted => m_TopicsSorted;
 
         string IHudTab.Label => "Topics";
 
@@ -43,6 +44,11 @@ namespace Unity.Robotics.Visualizations
             m_Connection.ListenForTopics(OnNewTopic, notifyAllExistingTopics: true);
         }
 
+        // public void getTopicSorted()
+        // {
+        //     return m_TopicsSorted;
+        // }
+
         void OnNewTopic(RosTopicState state)
         {
             VisualizationTopicsTabEntry vis;
@@ -58,7 +64,6 @@ namespace Unity.Robotics.Visualizations
         void IHudTab.OnGUI(HudPanel hud)
         {
             m_Connection.RefreshTopicsList();
-
             GUILayout.BeginHorizontal();
             bool showPrompt = (GUI.GetNameOfFocusedControl() != "topic_filter" && m_TopicFilter == "");
             GUI.SetNextControlName("topic_filter");
@@ -120,6 +125,7 @@ namespace Unity.Robotics.Visualizations
 
                 numTopicsShown++;
                 topicState.DrawGUI();
+                // Debug.Log(topicState.Topic + topicState.IsVisualizingUI + topicState.IsVisualizingDrawing);
             }
 
             GUILayout.EndScrollView();

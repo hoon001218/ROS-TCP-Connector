@@ -65,6 +65,8 @@ namespace Unity.Robotics.ROSTCPConnector
         internal HudPanel m_HudPanel = null;
         public HudPanel HUDPanel => m_HudPanel;
 
+        public bool is_Mine = true;
+
         class OutgoingMessageQueue
         {
             ConcurrentQueue<OutgoingMessageSender> m_OutgoingMessageQueue;
@@ -90,11 +92,12 @@ namespace Unity.Robotics.ROSTCPConnector
 
         OutgoingMessageQueue m_OutgoingMessageQueue = new OutgoingMessageQueue();
 
-        ConcurrentQueue<Tuple<string, byte[]>> m_IncomingMessages = new ConcurrentQueue<Tuple<string, byte[]>>();
+        public ConcurrentQueue<Tuple<string, byte[]>> m_IncomingMessages = new ConcurrentQueue<Tuple<string, byte[]>>();
+        public Tuple<string, byte[]> messagePhoton = new Tuple<string, byte[]>(null, null);
         CancellationTokenSource m_ConnectionThreadCancellation;
         public bool HasConnectionThread => m_ConnectionThreadCancellation != null;
 
-        static bool m_HasConnectionError = false;
+        public static bool m_HasConnectionError = false;
         public bool HasConnectionError => m_HasConnectionError;
 
         // only the main thread can access Time.*, so make a copy here
@@ -514,7 +517,8 @@ namespace Unity.Robotics.ROSTCPConnector
                 OnConnectionLostCallback,
                 m_OutgoingMessageQueue,
                 m_IncomingMessages,
-                m_ConnectionThreadCancellation.Token
+                m_ConnectionThreadCancellation.Token,
+                this.is_Mine
             ));
         }
 
@@ -576,6 +580,7 @@ namespace Unity.Robotics.ROSTCPConnector
             while (m_IncomingMessages.TryDequeue(out data))
             {
                 (string topic, byte[] contents) = data;
+                messagePhoton = data;
                 m_LastMessageReceivedRealtime = Time.realtimeSinceStartup;
 
                 if (m_SpecialIncomingMessageHandler != null)
@@ -770,7 +775,8 @@ namespace Unity.Robotics.ROSTCPConnector
             Action DeregisterAll,
             OutgoingMessageQueue outgoingQueue,
             ConcurrentQueue<Tuple<string, byte[]>> incomingQueue,
-            CancellationToken token)
+            CancellationToken token,
+            bool isMine)
         {
             //Debug.Log("ConnectionThread begins");
             int nextReaderIdx = 101;
@@ -784,64 +790,66 @@ namespace Unity.Robotics.ROSTCPConnector
 
                 try
                 {
-                    ROSConnection.m_HasConnectionError = true; // until we actually see a reply back, assume there's a problem
+                    if(isMine == true){
+                        ROSConnection.m_HasConnectionError = true; // until we actually see a reply back, assume there's a problem
 
-                    client = new TcpClient();
-                    client.Connect(rosIPAddress, rosPort);
+                        client = new TcpClient();
+                        client.Connect(rosIPAddress, rosPort);
 
-                    NetworkStream networkStream = client.GetStream();
-                    networkStream.ReadTimeout = (int)(networkTimeoutSeconds * 1000);
+                        NetworkStream networkStream = client.GetStream();
+                        networkStream.ReadTimeout = (int)(networkTimeoutSeconds * 1000);
 
-                    SendKeepalive(networkStream);
-                    OnConnectionStartedCallback(networkStream);
+                        SendKeepalive(networkStream);
+                        OnConnectionStartedCallback(networkStream);
 
-                    readerCancellation = new CancellationTokenSource();
-                    _ = Task.Run(() => ReaderThread(nextReaderIdx, networkStream, incomingQueue, sleepMilliseconds, readerCancellation.Token));
-                    nextReaderIdx++;
+                        readerCancellation = new CancellationTokenSource();
+                        _ = Task.Run(() => ReaderThread(nextReaderIdx, networkStream, incomingQueue, sleepMilliseconds, readerCancellation.Token));
+                        nextReaderIdx++;
 
-                    // connected, now just watch our queue for outgoing messages to send (or else send a keepalive message occasionally)
-                    float waitingSinceRealTime = s_RealTimeSinceStartup;
-                    while (true)
-                    {
-                        bool messageReadyEventWasSet = outgoingQueue.NewMessageReadyToSendEvent.WaitOne(sleepMilliseconds);
-                        token.ThrowIfCancellationRequested();
-
-                        if (messageReadyEventWasSet)
+                        // connected, now just watch our queue for outgoing messages to send (or else send a keepalive message occasionally)
+                        float waitingSinceRealTime = s_RealTimeSinceStartup;
+                        while (true)
                         {
-                            outgoingQueue.NewMessageReadyToSendEvent.Reset();
-                        }
-                        else
-                        {
-                            if (s_RealTimeSinceStartup > waitingSinceRealTime + keepaliveTime)
+                            bool messageReadyEventWasSet = outgoingQueue.NewMessageReadyToSendEvent.WaitOne(sleepMilliseconds);
+                            token.ThrowIfCancellationRequested();
+
+                            if (messageReadyEventWasSet)
                             {
-                                SendKeepalive(networkStream);
+                                outgoingQueue.NewMessageReadyToSendEvent.Reset();
+                            }
+                            else
+                            {
+                                if (s_RealTimeSinceStartup > waitingSinceRealTime + keepaliveTime)
+                                {
+                                    SendKeepalive(networkStream);
+                                    waitingSinceRealTime = s_RealTimeSinceStartup;
+                                }
+                            }
+
+                            while (outgoingQueue.TryDequeue(out OutgoingMessageSender sendsOutgoingMessages))
+                            {
+                                OutgoingMessageSender.SendToState sendToState = sendsOutgoingMessages.SendInternal(messageSerializer, networkStream);
+                                switch (sendToState)
+                                {
+                                    case OutgoingMessageSender.SendToState.Normal:
+                                        //This is normal operation.
+                                        break;
+                                    case OutgoingMessageSender.SendToState.QueueFullWarning:
+                                        //Unable to send messages to ROS as fast as we're generating them.
+                                        //This could be caused by a TCP connection that is too slow.
+                                        Debug.LogWarning($"Queue full! Messages are getting dropped! " +
+                                                        "Try check your connection speed is fast enough to handle the traffic.");
+                                        break;
+                                    case OutgoingMessageSender.SendToState.NoMessageToSendError:
+                                        //This indicates
+                                        Debug.LogError(
+                                            "Logic Error! A 'SendsOutgoingMessages' was queued but did not have any messages to send.");
+                                        break;
+                                }
+
+                                token.ThrowIfCancellationRequested();
                                 waitingSinceRealTime = s_RealTimeSinceStartup;
                             }
-                        }
-
-                        while (outgoingQueue.TryDequeue(out OutgoingMessageSender sendsOutgoingMessages))
-                        {
-                            OutgoingMessageSender.SendToState sendToState = sendsOutgoingMessages.SendInternal(messageSerializer, networkStream);
-                            switch (sendToState)
-                            {
-                                case OutgoingMessageSender.SendToState.Normal:
-                                    //This is normal operation.
-                                    break;
-                                case OutgoingMessageSender.SendToState.QueueFullWarning:
-                                    //Unable to send messages to ROS as fast as we're generating them.
-                                    //This could be caused by a TCP connection that is too slow.
-                                    Debug.LogWarning($"Queue full! Messages are getting dropped! " +
-                                                     "Try check your connection speed is fast enough to handle the traffic.");
-                                    break;
-                                case OutgoingMessageSender.SendToState.NoMessageToSendError:
-                                    //This indicates
-                                    Debug.LogError(
-                                        "Logic Error! A 'SendsOutgoingMessages' was queued but did not have any messages to send.");
-                                    break;
-                            }
-
-                            token.ThrowIfCancellationRequested();
-                            waitingSinceRealTime = s_RealTimeSinceStartup;
                         }
                     }
                 }

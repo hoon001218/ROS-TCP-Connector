@@ -15,7 +15,7 @@ namespace Unity.Robotics.ROSTCPConnector
         const float c_DraggableSize = 8;
         Rect m_WindowRect;
         public Rect WindowRect => m_WindowRect;
-        string m_Title;
+        public string m_Title;
         bool m_IsActive;
         public bool IsActive => m_IsActive;
         bool m_AutoLayout;

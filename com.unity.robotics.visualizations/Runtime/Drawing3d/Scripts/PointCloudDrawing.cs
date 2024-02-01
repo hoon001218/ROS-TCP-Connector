@@ -1,6 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
-
+// using Photon.Pun;
 using UnityEngine;
 
 namespace Unity.Robotics.Visualizations
@@ -26,6 +26,8 @@ namespace Unity.Robotics.Visualizations
                 newDrawingObj.transform.localRotation = Quaternion.identity;
             }
             PointCloudDrawing newDrawing = newDrawingObj.AddComponent<PointCloudDrawing>();
+            // newDrawing = newDrawingObj.AddComponent<PhotonviewMeshRenderer>();
+            // PointCloudDrawing newDrawing = newDrawingObj.AddComponent<PhotonView>();
             newDrawing.SetCapacity(numPoints);
             newDrawing.SetMaterial(material);
             return newDrawing;
